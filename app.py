@@ -64,6 +64,24 @@ def verificar_acceso():
 if not verificar_acceso():
     st.stop()  # Detiene la ejecución si no ha puesto la contraseña
 
+# Lista oficial exacta de médicos y servicios (reutilizable)
+lista_medicos = [
+    "Selecciona un médico o servicio...",
+    "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
+    "DRA INES RAMIREZ", "DRA CARLA SAAVEDRA", "DR CRISTIAN ATUE", "DRA ANNELIS CAZON",
+    "DR WILDER INTURIAS", "DR MARCELO TORRICO", "DR JUAN CARLOS GIL", "DRA CORAL RUIZ",
+    "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DRA ALEXANDRA ROMAN",
+    "DR ELIGIO ARCIENEGA", "DR CARLOS BROCKMAN", "DR DANIEL MENDIETA", "DR ALEJANDRO TORRICO",
+    "DRA MARIA LOURDES CORNEJO", "DRA KARINA CARTAGENA", "DA ANA CLAROS", "LIC ELBA GAMBOA",
+    "DR DIEGO ANTEZANA", "LIC SOFIA REYNOSO", "DR ERICK SALAS", "DR GEOFRI VELASQUEZ",
+    "DR JAVIER ENCINAS", "DRA PATRICIA PEÑA", "DR COCA", "DR RONALD APARICIO",
+    "DRA CARMEN ARAUCO", "DR MARIO SAAVEDRA", "DR RODRIGO PINTO", "DR FRANZ SANJINEZ",
+    "DR PABLO CESPEDES", "DR JHONNY RIOS", "DRA ANA FLORES", "DR RAMIRO ROJAS",
+    "DR MARIO URQUIDI", "LIC ROXANA ALBA", "DR REMY URIONA", "DR JIMMY ACEVEDO",
+    "ENFERMERIA", "ECOGRAFIA", "RX", "TOMOGRAFIA", "PAP", "HISTOPATOLOGIA",
+    "ELECTROCARDIOGRAMA", "ECOCARDIOGRAMA", "UROFLUJOMETRIA", "EXPENSAS", "LABORATORIO"
+]
+
 # --- 4. APLICACIÓN PRINCIPAL ---
 st.title("💰 Control Diario de Pagos")
 st.write("Registra tus cobros rápido y sin enredos para que el cierre de caja salga perfecto.")
@@ -88,24 +106,6 @@ with pestana_registro:
     st.subheader(f"Nuevo registro para: **{turno_actual}**")
     
     with st.form("form_registro", clear_on_submit=True):
-        # Lista oficial exacta de médicos y servicios
-        lista_medicos = [
-            "Selecciona un médico o servicio...",
-            "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
-            "DRA INES RAMIREZ", "DRA CARLA SAAVEDRA", "DR CRISTIAN ATUE", "DRA ANNELIS CAZON",
-            "DR WILDER INTURIAS", "DR MARCELO TORRICO", "DR JUAN CARLOS GIL", "DRA CORAL RUIZ",
-            "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DRA ALEXANDRA ROMAN",
-            "DR ELIGIO ARCIENEGA", "DR CARLOS BROCKMAN", "DR DANIEL MENDIETA", "DR ALEJANDRO TORRICO",
-            "DRA MARIA LOURDES CORNEJO", "DRA KARINA CARTAGENA", "DA ANA CLAROS", "LIC ELBA GAMBOA",
-            "DR DIEGO ANTEZANA", "LIC SOFIA REYNOSO", "DR ERICK SALAS", "DR GEOFRI VELASQUEZ",
-            "DR JAVIER ENCINAS", "DRA PATRICIA PEÑA", "DR COCA", "DR RONALD APARICIO",
-            "DRA CARMEN ARAUCO", "DR MARIO SAAVEDRA", "DR RODRIGO PINTO", "DR FRANZ SANJINEZ",
-            "DR PABLO CESPEDES", "DR JHONNY RIOS", "DRA ANA FLORES", "DR RAMIRO ROJAS",
-            "DR MARIO URQUIDI", "LIC ROXANA ALBA", "DR REMY URIONA", "DR JIMMY ACEVEDO",
-            "ENFERMERIA", "ECOGRAFIA", "RX", "TOMOGRAFIA", "PAP", "HISTOPATOLOGIA",
-            "ELECTROCARDIOGRAMA", "ECOCARDIOGRAMA", "UROFLUJOMETRIA", "EXPENSAS", "LABORATORIO"
-        ]
-        
         medico = st.selectbox("1. Médico Tratante / Servicio", lista_medicos)
         paciente = st.text_input("2. Nombre del Paciente (Copiado de Odoo)")
         quien_cancela = st.text_input("3. Nombre de quien cancela")
@@ -252,7 +252,7 @@ with pestana_cierre:
             
             # --- SECCIÓN: MODIFICAR O ELIMINAR REGISTROS ---
             st.divider()
-            with st.expander("⚙️ ¿Necesitas corregir el monto, cambiar tipo de pago o eliminar un registro?"):
+            with st.expander("⚙️ ¿Necesitas corregir paciente, médico, monto, tipo de pago o eliminar un registro?"):
                 st.write("Selecciona el paciente y monto correspondiente:")
                 
                 if not df_filtrado.empty:
@@ -264,7 +264,7 @@ with pestana_cierre:
                         opciones_pacientes.append(etiqueta)
                         mapeo_ids[etiqueta] = row['id']
                         
-                    seleccion_usuario = st.selectbox("Busca y selecciona el pago:", opciones_pacientes)
+                    seleccion_usuario = st.selectbox("Busca y selecciona el pago a modificar:", opciones_pacientes)
                     id_a_gestionar = mapeo_ids[seleccion_usuario]
                     
                     reg_actual = df[df["id"] == id_a_gestionar].iloc[0]
@@ -273,25 +273,41 @@ with pestana_cierre:
                     
                     with col_edit:
                         with st.form(f"form_editar_{id_a_gestionar}"):
-                            st.write("✏️ **Modificar Monto / Tipo**")
-                            nuevo_monto = st.number_input("Nuevo Monto (Bs.)", value=float(reg_actual['monto']), step=10.0, format="%.2f")
+                            st.write("✏️ **Modificar Datos del Pago**")
+                            
+                            # Nuevos campos editables: Paciente y Médico
+                            nuevo_paciente = st.text_input("Nombre del Paciente", value=str(reg_actual['paciente']))
+                            
+                            # Seleccionar médico actual por defecto
+                            medico_actual = reg_actual['medico']
+                            indice_medico = lista_medicos.index(medico_actual) if medico_actual in lista_medicos else 0
+                            nuevo_medico = st.selectbox("Médico Tratante / Servicio", lista_medicos, index=indice_medico)
+                            
+                            nuevo_monto = st.number_input("Monto (Bs.)", value=float(reg_actual['monto']), step=10.0, format="%.2f")
                             
                             opciones_tipo = ["EFECTIVO", "QR", "TARJETA"]
-                            indice_actual = opciones_tipo.index(reg_actual['tipo_pago']) if reg_actual['tipo_pago'] in opciones_tipo else 0
-                            nuevo_tipo = st.selectbox("Nuevo Tipo de Pago", opciones_tipo, index=indice_actual)
+                            indice_tipo = opciones_tipo.index(reg_actual['tipo_pago']) if reg_actual['tipo_pago'] in opciones_tipo else 0
+                            nuevo_tipo = st.selectbox("Tipo de Pago", opciones_tipo, index=indice_tipo)
                             
                             btn_actualizar = st.form_submit_button("🔄 Actualizar Datos")
                             
                             if btn_actualizar:
-                                try:
-                                    supabase.table("pagos").update({
-                                        "monto": float(nuevo_monto),
-                                        "tipo_pago": nuevo_tipo
-                                    }).eq("id", int(id_a_gestionar)).execute()
-                                    st.success("✅ ¡Registro actualizado con éxito!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error al actualizar: {e}")
+                                if nuevo_medico == "Selecciona un médico o servicio...":
+                                    st.warning("⚠️ Selecciona un médico válido.")
+                                elif not nuevo_paciente:
+                                    st.warning("⚠️ El nombre del paciente no puede estar vacío.")
+                                else:
+                                    try:
+                                        supabase.table("pagos").update({
+                                            "paciente": nuevo_paciente,
+                                            "medico": nuevo_medico,
+                                            "monto": float(nuevo_monto),
+                                            "tipo_pago": nuevo_tipo
+                                        }).eq("id", int(id_a_gestionar)).execute()
+                                        st.success("✅ ¡Registro actualizado con éxito!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error al actualizar: {e}")
                                     
                     with col_del:
                         with st.form(f"form_eliminar_{id_a_gestionar}"):
@@ -317,7 +333,6 @@ with pestana_cierre:
             # --- BOTÓN DE EXPORTAR A EXCEL REAL (.XLSX) ---
             st.divider()
             
-            # Generar archivo Excel en memoria usando openpyxl
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_filtrado.to_excel(writer, index=False, sheet_name='Cierre de Caja')
