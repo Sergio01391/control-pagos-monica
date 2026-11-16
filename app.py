@@ -93,7 +93,7 @@ with pestana_registro:
             "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
             "DRA INES RAMIREZ", "DRA CARLA SAAVEDRA", "DR CRISTIAN ATUE", "DRA ANNELIS CAZON",
             "DR WILDER INTURIAS", "DR MARCELO TORRICO", "DR JUAN CARLOS GIL", "DRA CORAL RUIZ",
-            "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DRA ALEXANDRA ROMAN",
+            "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DR ALEXANDRA ROMAN",
             "DR ELIGIO ARCIENEGA", "DR CARLOS BROCKMAN", "DR DANIEL MENDIETA", "DR ALEJANDRO TORRICO",
             "DRA MARIA LOURDES CORNEJO", "DRA KARINA CARTAGENA", "DA ANA CLAROS", "LIC ELBA GAMBOA",
             "DR DIEGO ANTEZANA", "LIC SOFIA REYNOSO", "DR ERICK SALAS", "DR GEOFRI VELASQUEZ",
@@ -109,7 +109,10 @@ with pestana_registro:
         paciente = st.text_input("2. Nombre del Paciente (Copiado de Odoo)")
         quien_cancela = st.text_input("3. Nombre de quien cancela")
         tipo_pago = st.selectbox("4. Forma de Pago", ["EFECTIVO", "QR", "TARJETA"])
+        
+        # MONI colocada arriba por defecto en la opción 5
         pagado_a = st.selectbox("5. ¿A quién se le entregó el dinero?", ["MONI", "JANET", "PATI"])
+        
         monto = st.number_input("6. Monto Pagado (Bs.)", min_value=0.0, step=10.0, format="%.2f")
         
         enviar = st.form_submit_button("💾 Guardar Este Pago")
@@ -146,7 +149,7 @@ with pestana_cambios:
         tipo_cambio = st.selectbox("1. Tipo de Cambio", ["QR", "TARJETA"])
         descripcion = st.text_input("2. Descripción / Motivo (Opcional)", placeholder="Ej. Cambio de sencillo, devolución, etc.")
         
-        personal_opciones = ["MONICA", "JANET", "PATRICIA", "KARLA", "ADRIANA", "ZULEMA"]
+        personal_opciones = ["MONICA", "JANET", "PATRICIA", "CARLA", "ADRIANA", "ZULEMA"]
         
         col_orig, col_dest = st.columns(2)
         with col_orig:
@@ -246,6 +249,65 @@ with pestana_cierre:
             st.write(f"📋 **Resultados ({len(df_filtrado)} registros encontrados):**")
             st.dataframe(df_filtrado, use_container_width=True)
             
+            # --- SECCIÓN: EDITAR O ELIMINAR REGISTROS ---
+            st.divider()
+            with st.expander("⚙️ ¿Necesitas modificar o eliminar un registro?"):
+                st.write("Selecciona el ID del registro que deseas gestionar (puedes ver el ID en la tabla de arriba):")
+                
+                ids_disponibles = list(df["id"].values) if "id" in df.columns else []
+                
+                if ids_disponibles:
+                    id_a_gestionar = st.selectbox("Número de ID del registro", ids_disponibles)
+                    
+                    reg_actual = df[df["id"] == id_a_gestionar].iloc[0]
+                    st.info(f"Seleccionado: **{reg_actual['paciente']}** (Médico: {reg_actual['medico']} | Monto: {reg_actual['monto']} Bs | Tipo: {reg_actual['tipo_pago']})")
+                    
+                    # Opciones divididas en columnas: Editar vs Eliminar
+                    col_edit, col_del = st.columns(2)
+                    
+                    with col_edit:
+                        with st.form(f"form_editar_{id_a_gestionar}"):
+                            st.write("✏️ **Modificar Monto/Tipo**")
+                            nuevo_monto = st.number_input("Nuevo Monto (Bs.)", value=float(reg_actual['monto']), step=10.0, format="%.2f")
+                            
+                            opciones_tipo = ["EFECTIVO", "QR", "TARJETA"]
+                            indice_actual = opciones_tipo.index(reg_actual['tipo_pago']) if reg_actual['tipo_pago'] in opciones_tipo else 0
+                            nuevo_tipo = st.selectbox("Nuevo Tipo de Pago", opciones_tipo, index=indice_actual)
+                            
+                            btn_actualizar = st.form_submit_button("🔄 Actualizar Datos")
+                            
+                            if btn_actualizar:
+                                try:
+                                    supabase.table("pagos").update({
+                                        "monto": float(nuevo_monto),
+                                        "tipo_pago": nuevo_tipo
+                                    }).eq("id", int(id_a_gestionar)).execute()
+                                    st.success("✅ ¡Registro actualizado con éxito!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al actualizar: {e}")
+                                    
+                    with col_del:
+                        with st.form(f"form_eliminar_{id_a_gestionar}"):
+                            st.write("🗑️ **Eliminar Registro**")
+                            st.warning("⚠️ Esta acción borrará el pago por completo.")
+                            
+                            confirmar_eliminar = st.checkbox("Confirmo que deseo eliminar este registro")
+                            btn_eliminar = st.form_submit_button("❌ Eliminar Permanentemente")
+                            
+                            if btn_eliminar:
+                                if confirmar_eliminar:
+                                    try:
+                                        supabase.table("pagos").delete().eq("id", int(id_a_gestionar)).execute()
+                                        st.success("🗑️ ¡Registro eliminado con éxito!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error al eliminar: {e}")
+                                else:
+                                    st.warning("⚠️ Debes marcar la casilla de confirmación para eliminar.")
+                else:
+                    st.warning("No hay IDs disponibles para modificar en esta fecha.")
+
             # --- BOTÓN DE EXPORTAR A CSV (EXCEL) ---
             st.divider()
             csv_data = df_filtrado.to_csv(index=False).encode('utf-8')
@@ -253,7 +315,7 @@ with pestana_cierre:
                 label="📥 Descargar Reporte en Excel (CSV)",
                 data=csv_data,
                 file_name=f"cierre_caja_{fecha_consulta}.csv",
-                mime="text/csv",
+                mime="text/css" if False else "text/csv",
             )
         else:
             st.info("No hay registros guardados para la fecha seleccionada.")
