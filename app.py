@@ -1,7 +1,8 @@
 import streamlit as st  # Importa Streamlit para la interfaz web
 from datetime import datetime  # Importa la gestión de fechas del sistema
 from supabase import create_client, Client  # Importa la librería para conectar con Supabase
-import pandas as pd  # Importa Pandas para manejar tablas y exportar a CSV/Excel
+import pandas as pd  # Importa Pandas para manejar tablas
+import io  # Importa io para manejar archivos en memoria
 
 # --- 1. CONEXIÓN A SUPABASE ---
 SUPABASE_URL = "https://xfxmmcaxqheedltfhgbv.supabase.co"  # Tu URL correcta de Supabase
@@ -249,12 +250,11 @@ with pestana_cierre:
             st.write(f"📋 **Resultados ({len(df_filtrado)} registros encontrados):**")
             st.dataframe(df_filtrado, use_container_width=True)
             
-            # --- SECCIÓN: MODIFICAR O ELIMINAR POR NOMBRE DE PACIENTE Y MONTO ---
+            # --- SECCIÓN: MODIFICAR O ELIMINAR REGISTROS ---
             st.divider()
             with st.expander("⚙️ ¿Necesitas corregir el monto, cambiar tipo de pago o eliminar un registro?"):
                 st.write("Selecciona el paciente y monto correspondiente:")
                 
-                # Creamos una lista amigable con el nombre del paciente y su monto para que Mónica lo identifique al instante
                 if not df_filtrado.empty:
                     opciones_pacientes = []
                     mapeo_ids = {}
@@ -269,7 +269,6 @@ with pestana_cierre:
                     
                     reg_actual = df[df["id"] == id_a_gestionar].iloc[0]
                     
-                    # Opciones divididas en dos columnas limpias
                     col_edit, col_del = st.columns(2)
                     
                     with col_edit:
@@ -315,14 +314,20 @@ with pestana_cierre:
                 else:
                     st.warning("No hay registros disponibles para modificar con los filtros actuales.")
 
-            # --- BOTÓN DE EXPORTAR A CSV (EXCEL) ---
+            # --- BOTÓN DE EXPORTAR A EXCEL REAL (.XLSX) ---
             st.divider()
-            csv_data = df_filtrado.to_csv(index=False).encode('utf-8')
+            
+            # Generar archivo Excel en memoria usando openpyxl
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_filtrado.to_excel(writer, index=False, sheet_name='Cierre de Caja')
+            excel_data = output.getvalue()
+            
             st.download_button(
-                label="📥 Descargar Reporte en Excel (CSV)",
-                data=csv_data,
-                file_name=f"cierre_caja_{fecha_consulta}.csv",
-                mime="text/csv",
+                label="📥 Descargar Reporte en Excel Real (.xlsx)",
+                data=excel_data,
+                file_name=f"cierre_caja_{fecha_consulta}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         else:
             st.info("No hay registros guardados para la fecha seleccionada.")
