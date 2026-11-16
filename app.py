@@ -93,7 +93,7 @@ with pestana_registro:
             "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
             "DRA INES RAMIREZ", "DRA CARLA SAAVEDRA", "DR CRISTIAN ATUE", "DRA ANNELIS CAZON",
             "DR WILDER INTURIAS", "DR MARCELO TORRICO", "DR JUAN CARLOS GIL", "DRA CORAL RUIZ",
-            "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DR ALEXANDRA ROMAN",
+            "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DRA ALEXANDRA ROMAN",
             "DR ELIGIO ARCIENEGA", "DR CARLOS BROCKMAN", "DR DANIEL MENDIETA", "DR ALEJANDRO TORRICO",
             "DRA MARIA LOURDES CORNEJO", "DRA KARINA CARTAGENA", "DA ANA CLAROS", "LIC ELBA GAMBOA",
             "DR DIEGO ANTEZANA", "LIC SOFIA REYNOSO", "DR ERICK SALAS", "DR GEOFRI VELASQUEZ",
@@ -249,25 +249,32 @@ with pestana_cierre:
             st.write(f"📋 **Resultados ({len(df_filtrado)} registros encontrados):**")
             st.dataframe(df_filtrado, use_container_width=True)
             
-            # --- SECCIÓN: EDITAR O ELIMINAR REGISTROS ---
+            # --- SECCIÓN: MODIFICAR O ELIMINAR POR NOMBRE DE PACIENTE Y MONTO ---
             st.divider()
-            with st.expander("⚙️ ¿Necesitas modificar o eliminar un registro?"):
-                st.write("Selecciona el ID del registro que deseas gestionar (puedes ver el ID en la tabla de arriba):")
+            with st.expander("⚙️ ¿Necesitas corregir el monto, cambiar tipo de pago o eliminar un registro?"):
+                st.write("Selecciona el paciente y monto correspondiente:")
                 
-                ids_disponibles = list(df["id"].values) if "id" in df.columns else []
-                
-                if ids_disponibles:
-                    id_a_gestionar = st.selectbox("Número de ID del registro", ids_disponibles)
+                # Creamos una lista amigable con el nombre del paciente y su monto para que Mónica lo identifique al instante
+                if not df_filtrado.empty:
+                    opciones_pacientes = []
+                    mapeo_ids = {}
+                    
+                    for _, row in df_filtrado.iterrows():
+                        etiqueta = f"{row['paciente']} — {row['monto']} Bs ({row['tipo_pago']} - Méd.: {row['medico']})"
+                        opciones_pacientes.append(etiqueta)
+                        mapeo_ids[etiqueta] = row['id']
+                        
+                    seleccion_usuario = st.selectbox("Busca y selecciona el pago:", opciones_pacientes)
+                    id_a_gestionar = mapeo_ids[seleccion_usuario]
                     
                     reg_actual = df[df["id"] == id_a_gestionar].iloc[0]
-                    st.info(f"Seleccionado: **{reg_actual['paciente']}** (Médico: {reg_actual['medico']} | Monto: {reg_actual['monto']} Bs | Tipo: {reg_actual['tipo_pago']})")
                     
-                    # Opciones divididas en columnas: Editar vs Eliminar
+                    # Opciones divididas en dos columnas limpias
                     col_edit, col_del = st.columns(2)
                     
                     with col_edit:
                         with st.form(f"form_editar_{id_a_gestionar}"):
-                            st.write("✏️ **Modificar Monto/Tipo**")
+                            st.write("✏️ **Modificar Monto / Tipo**")
                             nuevo_monto = st.number_input("Nuevo Monto (Bs.)", value=float(reg_actual['monto']), step=10.0, format="%.2f")
                             
                             opciones_tipo = ["EFECTIVO", "QR", "TARJETA"]
@@ -290,9 +297,9 @@ with pestana_cierre:
                     with col_del:
                         with st.form(f"form_eliminar_{id_a_gestionar}"):
                             st.write("🗑️ **Eliminar Registro**")
-                            st.warning("⚠️ Esta acción borrará el pago por completo.")
+                            st.warning("⚠️ Borrará este pago por completo.")
                             
-                            confirmar_eliminar = st.checkbox("Confirmo que deseo eliminar este registro")
+                            confirmar_eliminar = st.checkbox("Confirmo la eliminación")
                             btn_eliminar = st.form_submit_button("❌ Eliminar Permanentemente")
                             
                             if btn_eliminar:
@@ -304,9 +311,9 @@ with pestana_cierre:
                                     except Exception as e:
                                         st.error(f"Error al eliminar: {e}")
                                 else:
-                                    st.warning("⚠️ Debes marcar la casilla de confirmación para eliminar.")
+                                    st.warning("⚠️ Marca la casilla para confirmar.")
                 else:
-                    st.warning("No hay IDs disponibles para modificar en esta fecha.")
+                    st.warning("No hay registros disponibles para modificar con los filtros actuales.")
 
             # --- BOTÓN DE EXPORTAR A CSV (EXCEL) ---
             st.divider()
@@ -315,7 +322,7 @@ with pestana_cierre:
                 label="📥 Descargar Reporte en Excel (CSV)",
                 data=csv_data,
                 file_name=f"cierre_caja_{fecha_consulta}.csv",
-                mime="text/css" if False else "text/csv",
+                mime="text/csv",
             )
         else:
             st.info("No hay registros guardados para la fecha seleccionada.")
