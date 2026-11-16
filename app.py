@@ -150,7 +150,7 @@ with pestana_cambios:
         tipo_cambio = st.selectbox("1. Tipo de Cambio", ["QR", "TARJETA"])
         descripcion = st.text_input("2. Descripción / Motivo (Opcional)", placeholder="Ej. Cambio de sencillo, devolución, etc.")
         
-        personal_opciones = ["MONICA", "JANET", "PATRICIA", "CARLA", "ADRIANA", "ZULEMA"]
+        personal_opciones = ["MONICA", "JANET", "PATRICIA", "KARLA", "ADRIANA", "ZULEMA"]
         
         col_orig, col_dest = st.columns(2)
         with col_orig:
