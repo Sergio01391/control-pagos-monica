@@ -87,6 +87,8 @@ def verificar_acceso():
 if not verificar_acceso():
     st.stop()
 
+es_monica = (st.session_state.get("usuario_actual", "").strip().upper() == "MONICA")
+
 # --- FUNCIONES PARA CARGAR DATOS DINÁMICAMENTE DESDE SUPABASE ---
 def obtener_medicos():
     try:
@@ -146,13 +148,18 @@ turno_actual = st.radio(
 
 st.divider()
 
-# Cuatro pestañas ordenadas
-pestana_registro, pestana_cambios, pestana_cierre, pestana_config = st.tabs([
+# Pestañas dinámicas: Configuración solo visible para MONICA
+nombres_pestanas = [
     "📝 Registrar Nuevo Pago", 
     "🔄 Cambios QR-Tarjetas", 
-    "📊 Ver Cierre de Caja y Reportes",
-    "⚙️ Configuración"
-])
+    "📊 Ver Cierre de Caja y Reportes"
+]
+if es_monica:
+    nombres_pestanas.append("⚙️ Configuración")
+
+pestanas = st.tabs(nombres_pestanas)
+pestana_registro, pestana_cambios, pestana_cierre = pestanas[0], pestanas[1], pestanas[2]
+pestana_config = pestanas[3] if es_monica else None
 
 with pestana_registro:
     st.subheader(f"Nuevo registro para: **{turno_actual}**")
@@ -411,108 +418,118 @@ with pestana_cierre:
     except Exception:
         st.info("Registra algunos pagos para habilitar los reportes y filtros.")
 
-with pestana_config:
-    st.subheader("⚙️ Configuración y Gestión General")
-    st.write("Administra los usuarios de acceso, los médicos y el personal.")
-    
-    st.write("🔑 **Gestión de Usuarios de Acceso**")
-    col_u1, col_u2 = st.columns(2)
-    
-    with col_u1:
-        with st.form("form_nuevo_usuario", clear_on_submit=True):
-            st.write("➕ **Crear Nuevo Usuario**")
-            nuevo_user = st.text_input("Nombre de Usuario (Ej: janet)").strip().lower()
-            nuevo_pass = st.text_input("Contraseña", type="password")
-            btn_add_user = st.form_submit_button("Crear Acceso")
-            
-            if btn_add_user:
-                if not nuevo_user or not nuevo_pass:
-                    st.warning("⚠️ Llena ambos campos.")
-                else:
-                    try:
-                        supabase.table("usuarios").insert({"nombre_usuario": nuevo_user, "password": nuevo_pass}).execute()
-                        st.success(f"✅ ¡Usuario '{nuevo_user}' creado con éxito!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                        
-    with col_u2:
-        try:
-            resp_users = supabase.table("usuarios").select("nombre_usuario").execute()
-            lista_usuarios_db = [u["nombre_usuario"] for u in resp_users.data] if resp_users.data else ["monica"]
-        except Exception:
-            lista_usuarios_db = ["monica"]
-            
-        with st.form("form_del_usuario"):
-            st.write("❌ **Eliminar Acceso de Usuario**")
-            user_a_borrar = st.selectbox("Selecciona usuario a revocar", lista_usuarios_db)
-            btn_del_user = st.form_submit_button("Revocar Acceso")
-            
-            if btn_del_user:
-                if user_a_borrar == "monica":
-                    st.warning("⚠️ No puedes eliminar al usuario principal 'monica'.")
-                else:
-                    try:
-                        supabase.table("usuarios").delete().eq("nombre_usuario", user_a_borrar).execute()
-                        st.success(f"🗑️ ¡Acceso revocado para '{user_a_borrar}'!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-    st.divider()
-    
-    col_c1, col_c2 = st.columns(2)
-    
-    with col_c1:
-        st.write("👨‍⚕️ **Médicos y Servicios**")
-        with st.form("form_nuevo_medico", clear_on_submit=True):
-            nuevo_medico_input = st.text_input("Agregar Nuevo Médico")
-            btn_add_medico = st.form_submit_button("➕ Registrar Médico")
-            
-            if btn_add_medico:
-                if not nuevo_medico_input:
-                    st.warning("⚠️ Ingresa un nombre válido.")
-                else:
-                    try:
-                        supabase.table("medicos").insert({"nombre": nuevo_medico_input.strip().upper()}).execute()
-                        st.success("✅ ¡Médico agregado con éxito!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                        
-    with col_c2:
-        st.write("👩‍💼 **Gestión de Compañeras (Personal)**")
+if pestana_config is not None:
+    with pestana_config:
+        st.subheader("⚙️ Configuración y Gestión General")
+        st.write("Administra los usuarios de acceso, los médicos y el personal.")
         
-        with st.form("form_nueva_companera", clear_on_submit=True):
-            nueva_comp_input = st.text_input("Agregar Nueva Compañera")
-            btn_add_comp = st.form_submit_button("➕ Registrar Compañera")
-            
-            if btn_add_comp:
-                if not nueva_comp_input:
-                    st.warning("⚠️ Ingresa un nombre válido.")
+        # Sección de Usuarios para el Login
+        st.write("🔑 **Gestión de Usuarios de Acceso**")
+        col_u1, col_u2 = st.columns(2)
+        
+        with col_u1:
+            with st.form("form_nuevo_usuario", clear_on_submit=True):
+                st.write("➕ **Crear Nuevo Usuario**")
+                nuevo_user = st.text_input("Nombre de Usuario (Ej: janet)").strip().lower()
+                nuevo_pass = st.text_input("Contraseña", type="password")
+                btn_add_user = st.form_submit_button("Crear Acceso")
+                
+                if btn_add_user:
+                    if not nuevo_user or not nuevo_pass:
+                        st.warning("⚠️ Llena ambos campos.")
+                    elif nuevo_user == "monica":
+                        st.warning("⚠️ El usuario 'monica' ya existe y está protegido.")
+                    else:
+                        try:
+                            supabase.table("usuarios").insert({"nombre_usuario": nuevo_user, "password": nuevo_pass}).execute()
+                            st.success(f"✅ ¡Usuario '{nuevo_user}' creado con éxito!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                            
+        with col_u2:
+            try:
+                resp_users = supabase.table("usuarios").select("nombre_usuario").execute()
+                lista_usuarios_db = [
+                    u["nombre_usuario"] for u in resp_users.data
+                    if u.get("nombre_usuario", "").strip().lower() != "monica"
+                ] if resp_users.data else []
+            except Exception:
+                lista_usuarios_db = []
+                
+            with st.form("form_del_usuario"):
+                st.write("❌ **Eliminar Acceso de Usuario**")
+                if lista_usuarios_db:
+                    user_a_borrar = st.selectbox("Selecciona usuario a revocar", lista_usuarios_db)
+                    btn_del_user = st.form_submit_button("Revocar Acceso")
+                    
+                    if btn_del_user:
+                        if user_a_borrar.strip().lower() == "monica":
+                            st.warning("⚠️ El usuario 'monica' no puede eliminarse.")
+                        else:
+                            try:
+                                supabase.table("usuarios").delete().eq("nombre_usuario", user_a_borrar).execute()
+                                st.success(f"🗑️ ¡Acceso revocado para '{user_a_borrar}'!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
                 else:
-                    try:
-                        supabase.table("personal").insert({"nombre": nueva_comp_input.strip().upper()}).execute()
-                        st.success("✅ ¡Compañera agregada con éxito!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                    st.info("No hay otros usuarios creados para revocar ('monica' está protegida).")
 
-        with st.form("form_eliminar_companera"):
-            st.write("❌ **Dar de baja compañera**")
-            comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones)
-            btn_del_comp = st.form_submit_button("🗑️ Eliminar Compañera")
+        st.divider()
+        
+        col_c1, col_c2 = st.columns(2)
+        
+        with col_c1:
+            st.write("👨‍⚕️ **Médicos y Servicios**")
+            with st.form("form_nuevo_medico", clear_on_submit=True):
+                nuevo_medico_input = st.text_input("Agregar Nuevo Médico")
+                btn_add_medico = st.form_submit_button("➕ Registrar Médico")
+                
+                if btn_add_medico:
+                    if not nuevo_medico_input:
+                        st.warning("⚠️ Ingresa un nombre válido.")
+                    else:
+                        try:
+                            supabase.table("medicos").insert({"nombre": nuevo_medico_input.strip().upper()}).execute()
+                            st.success("✅ ¡Médico agregado con éxito!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                            
+        with col_c2:
+            st.write("👩‍💼 **Gestión de Compañeras (Personal)**")
             
-            if btn_del_comp:
-                if len(personal_opciones) <= 1:
-                    st.warning("⚠️ No puedes eliminar a todos los miembros.")
-                else:
-                    try:
-                        supabase.table("personal").delete().eq("nombre", comp_a_borrar).execute()
-                        st.success(f"🗑️ ¡Compañera {comp_a_borrar} eliminada con éxito!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al eliminar: {e}")
+            with st.form("form_nueva_companera", clear_on_submit=True):
+                nueva_comp_input = st.text_input("Agregar Nueva Compañera")
+                btn_add_comp = st.form_submit_button("➕ Registrar Compañera")
+                
+                if btn_add_comp:
+                    if not nueva_comp_input:
+                        st.warning("⚠️ Ingresa un nombre válido.")
+                    else:
+                        try:
+                            supabase.table("personal").insert({"nombre": nueva_comp_input.strip().upper()}).execute()
+                            st.success("✅ ¡Compañera agregada con éxito!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+
+            with st.form("form_eliminar_companera"):
+                st.write("❌ **Dar de baja compañera**")
+                comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones)
+                btn_del_comp = st.form_submit_button("🗑️ Eliminar Compañera")
+                
+                if btn_del_comp:
+                    if len(personal_opciones) <= 1:
+                        st.warning("⚠️ No puedes eliminar a todos los miembros.")
+                    else:
+                        try:
+                            supabase.table("personal").delete().eq("nombre", comp_a_borrar).execute()
+                            st.success(f"🗑️ ¡Compañera {comp_a_borrar} eliminada con éxito!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al eliminar: {e}")
 
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state["autenticado"] = False
