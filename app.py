@@ -1,8 +1,15 @@
 import streamlit as st  # Importa Streamlit para la interfaz web
 from datetime import datetime  # Importa la gestión de fechas del sistema
+from zoneinfo import ZoneInfo  # Zona horaria nativa de Python (sin librerías extra)
 from supabase import create_client, Client  # Importa la librería para conectar con Supabase
 import pandas as pd  # Importa Pandas para manejar tablas
 import io  # Importa io para manejar archivos en memoria
+
+# --- ZONA HORARIA LOCAL (COCHABAMBA / BOLIVIA) ---
+ZONA_BOLIVIA = ZoneInfo("America/La_Paz")
+
+def ahora_bolivia():
+    return datetime.now(ZONA_BOLIVIA)
 
 # --- 1. CONEXIÓN A SUPABASE ---
 SUPABASE_URL = "https://xfxmmcaxqheedltfhgbv.supabase.co"  # Tu URL correcta de Supabase
@@ -128,7 +135,7 @@ with pestana_registro:
             else:
                 try:
                     datos_a_guardar = {
-                        "fecha": str(datetime.now().date()),
+                        "fecha": str(ahora_bolivia().date()),
                         "turno": turno_actual,
                         "medico": medico,
                         "paciente": paciente,
@@ -170,7 +177,7 @@ with pestana_cambios:
             else:
                 try:
                     datos_cambio = {
-                        "fecha": str(datetime.now().date()),
+                        "fecha": str(ahora_bolivia().date()),
                         "turno": turno_actual,
                         "tipo_cambio": tipo_cambio,
                         "descripcion": descripcion if descripcion else "Sin descripción",
@@ -186,7 +193,7 @@ with pestana_cambios:
     st.divider()
     st.subheader("📋 Cambios registrados hoy")
     try:
-        resp_cambios = supabase.table("cambios").select("*").eq("fecha", str(datetime.now().date())).eq("turno", turno_actual).execute()
+        resp_cambios = supabase.table("cambios").select("*").eq("fecha", str(ahora_bolivia().date())).eq("turno", turno_actual).execute()
         if resp_cambios.data:
             st.dataframe(resp_cambios.data, use_container_width=True)
         else:
@@ -197,8 +204,8 @@ with pestana_cambios:
 with pestana_cierre:
     st.subheader("📊 Resumen para Cierre de Caja y Filtros")
     
-    # Selector de fecha para auditar
-    fecha_consulta = st.date_input("Selecciona la fecha a revisar", datetime.today())
+    # Selector de fecha para auditar (usando fecha local de Bolivia)
+    fecha_consulta = st.date_input("Selecciona la fecha a revisar", ahora_bolivia().date())
     
     try:
         # Traemos todos los registros del día seleccionado
@@ -225,132 +232,4 @@ with pestana_cierre:
             df_filtrado = df.copy()
             if filtro_turno != "TODOS":
                 df_filtrado = df_filtrado[df_filtrado["turno"] == filtro_turno]
-            if filtro_medico != "TODOS":
-                df_filtrado = df_filtrado[df_filtrado["medico"] == filtro_medico]
-            if filtro_pago != "TODOS":
-                df_filtrado = df_filtrado[df_filtrado["tipo_pago"] == filtro_pago]
-            
-            st.divider()
-            
-            # Calcular totales basados en lo que está filtrado en pantalla
-            total_efectivo = df_filtrado[df_filtrado["tipo_pago"] == "EFECTIVO"]["monto"].sum() if not df_filtrado.empty else 0
-            total_qr = df_filtrado[df_filtrado["tipo_pago"] == "QR"]["monto"].sum() if not df_filtrado.empty else 0
-            total_tarjeta = df_filtrado[df_filtrado["tipo_pago"] == "TARJETA"]["monto"].sum() if not df_filtrado.empty else 0
-            
-            # Tarjetas métricas con totales
-            m1, m2, m3 = st.columns(3)
-            with m1:
-                st.metric(label="💵 Efectivo Filtrado", value=f"{total_efectivo:.2f} Bs")
-            with m2:
-                st.metric(label="📱 QR Filtrado", value=f"{total_qr:.2f} Bs")
-            with m3:
-                st.metric(label="💳 Tarjeta Filtrado", value=f"{total_tarjeta:.2f} Bs")
-                
-            st.write("")
-            st.write(f"📋 **Resultados ({len(df_filtrado)} registros encontrados):**")
-            st.dataframe(df_filtrado, use_container_width=True)
-            
-            # --- SECCIÓN: MODIFICAR O ELIMINAR REGISTROS ---
-            st.divider()
-            with st.expander("⚙️ ¿Necesitas corregir paciente, médico, monto, tipo de pago o eliminar un registro?"):
-                st.write("Selecciona el paciente y monto correspondiente:")
-                
-                if not df_filtrado.empty:
-                    opciones_pacientes = []
-                    mapeo_ids = {}
-                    
-                    for _, row in df_filtrado.iterrows():
-                        etiqueta = f"{row['paciente']} — {row['monto']} Bs ({row['tipo_pago']} - Méd.: {row['medico']})"
-                        opciones_pacientes.append(etiqueta)
-                        mapeo_ids[etiqueta] = row['id']
-                        
-                    seleccion_usuario = st.selectbox("Busca y selecciona el pago a modificar:", opciones_pacientes)
-                    id_a_gestionar = mapeo_ids[seleccion_usuario]
-                    
-                    reg_actual = df[df["id"] == id_a_gestionar].iloc[0]
-                    
-                    col_edit, col_del = st.columns(2)
-                    
-                    with col_edit:
-                        with st.form(f"form_editar_{id_a_gestionar}"):
-                            st.write("✏️ **Modificar Datos del Pago**")
-                            
-                            # Nuevos campos editables: Paciente y Médico
-                            nuevo_paciente = st.text_input("Nombre del Paciente", value=str(reg_actual['paciente']))
-                            
-                            # Seleccionar médico actual por defecto
-                            medico_actual = reg_actual['medico']
-                            indice_medico = lista_medicos.index(medico_actual) if medico_actual in lista_medicos else 0
-                            nuevo_medico = st.selectbox("Médico Tratante / Servicio", lista_medicos, index=indice_medico)
-                            
-                            nuevo_monto = st.number_input("Monto (Bs.)", value=float(reg_actual['monto']), step=10.0, format="%.2f")
-                            
-                            opciones_tipo = ["EFECTIVO", "QR", "TARJETA"]
-                            indice_tipo = opciones_tipo.index(reg_actual['tipo_pago']) if reg_actual['tipo_pago'] in opciones_tipo else 0
-                            nuevo_tipo = st.selectbox("Tipo de Pago", opciones_tipo, index=indice_tipo)
-                            
-                            btn_actualizar = st.form_submit_button("🔄 Actualizar Datos")
-                            
-                            if btn_actualizar:
-                                if nuevo_medico == "Selecciona un médico o servicio...":
-                                    st.warning("⚠️ Selecciona un médico válido.")
-                                elif not nuevo_paciente:
-                                    st.warning("⚠️ El nombre del paciente no puede estar vacío.")
-                                else:
-                                    try:
-                                        supabase.table("pagos").update({
-                                            "paciente": nuevo_paciente,
-                                            "medico": nuevo_medico,
-                                            "monto": float(nuevo_monto),
-                                            "tipo_pago": nuevo_tipo
-                                        }).eq("id", int(id_a_gestionar)).execute()
-                                        st.success("✅ ¡Registro actualizado con éxito!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error al actualizar: {e}")
-                                    
-                    with col_del:
-                        with st.form(f"form_eliminar_{id_a_gestionar}"):
-                            st.write("🗑️ **Eliminar Registro**")
-                            st.warning("⚠️ Borrará este pago por completo.")
-                            
-                            confirmar_eliminar = st.checkbox("Confirmo la eliminación")
-                            btn_eliminar = st.form_submit_button("❌ Eliminar Permanentemente")
-                            
-                            if btn_eliminar:
-                                if confirmar_eliminar:
-                                    try:
-                                        supabase.table("pagos").delete().eq("id", int(id_a_gestionar)).execute()
-                                        st.success("🗑️ ¡Registro eliminado con éxito!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error al eliminar: {e}")
-                                else:
-                                    st.warning("⚠️ Marca la casilla para confirmar.")
-                else:
-                    st.warning("No hay registros disponibles para modificar con los filtros actuales.")
-
-            # --- BOTÓN DE EXPORTAR A EXCEL REAL (.XLSX) ---
-            st.divider()
-            
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_filtrado.to_excel(writer, index=False, sheet_name='Cierre de Caja')
-            excel_data = output.getvalue()
-            
-            st.download_button(
-                label="📥 Descargar Reporte en Excel Real (.xlsx)",
-                data=excel_data,
-                file_name=f"cierre_caja_{fecha_consulta}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        else:
-            st.info("No hay registros guardados para la fecha seleccionada.")
-            
-    except Exception as e:
-        st.info("Registra algunos pagos para habilitar los reportes y filtros.")
-
-# Botón lateral para salir
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state["autenticado"] = False
-    st.rerun()
+            if filtro_
