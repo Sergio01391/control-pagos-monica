@@ -125,6 +125,7 @@ def obtener_personal():
     return ["MONICA", "JANET", "PATRICIA", "KARLA", "ADRIANA", "ZULEMA"]
 
 lista_medicos = obtener_medicos()
+medicos_solo_nombres = [m for m in lista_medicos if m != "Selecciona un médico o servicio..."]
 personal_opciones = obtener_personal()
 
 # --- 4. APLICACIÓN PRINCIPAL ---
@@ -482,8 +483,9 @@ if pestana_config is not None:
         
         with col_c1:
             st.write("👨‍⚕️ **Médicos y Servicios**")
+            
             with st.form("form_nuevo_medico", clear_on_submit=True):
-                nuevo_medico_input = st.text_input("Agregar Nuevo Médico")
+                nuevo_medico_input = st.text_input("Agregar Nuevo Médico / Servicio")
                 btn_add_medico = st.form_submit_button("➕ Registrar Médico")
                 
                 if btn_add_medico:
@@ -496,6 +498,41 @@ if pestana_config is not None:
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
+
+            with st.form("form_editar_medico"):
+                st.write("✏️ **Editar médico / servicio**")
+                medico_a_editar = st.selectbox("Selecciona a quién editar", medicos_solo_nombres, key="sel_edit_med")
+                nuevo_nombre_medico = st.text_input("Nuevo nombre", value=medico_a_editar if medicos_solo_nombres else "").strip().upper()
+                btn_edit_medico = st.form_submit_button("🔄 Guardar Cambio de Nombre")
+                
+                if btn_edit_medico:
+                    if not nuevo_nombre_medico:
+                        st.warning("⚠️ Ingresa un nombre válido.")
+                    elif nuevo_nombre_medico == medico_a_editar:
+                        st.info("ℹ️ El nombre es el mismo, no se realizaron cambios.")
+                    else:
+                        try:
+                            supabase.table("medicos").update({"nombre": nuevo_nombre_medico}).eq("nombre", medico_a_editar).execute()
+                            st.success(f"✅ ¡Nombre actualizado de {medico_a_editar} a {nuevo_nombre_medico}!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al editar: {e}")
+
+            with st.form("form_eliminar_medico"):
+                st.write("❌ **Dar de baja médico / servicio**")
+                medico_a_borrar = st.selectbox("Selecciona a quién eliminar", medicos_solo_nombres, key="sel_del_med")
+                btn_del_medico = st.form_submit_button("🗑️ Eliminar Médico")
+                
+                if btn_del_medico:
+                    if len(medicos_solo_nombres) <= 1:
+                        st.warning("⚠️ No puedes eliminar todos los registros.")
+                    else:
+                        try:
+                            supabase.table("medicos").delete().eq("nombre", medico_a_borrar).execute()
+                            st.success(f"🗑️ ¡{medico_a_borrar} eliminado con éxito!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al eliminar: {e}")
                             
         with col_c2:
             st.write("👩‍💼 **Gestión de Compañeras (Personal)**")
@@ -515,9 +552,28 @@ if pestana_config is not None:
                         except Exception as e:
                             st.error(f"Error: {e}")
 
+            with st.form("form_editar_companera"):
+                st.write("✏️ **Editar nombre de compañera**")
+                comp_a_editar = st.selectbox("Selecciona a quién editar", personal_opciones, key="sel_edit_comp")
+                nuevo_nombre_comp = st.text_input("Nuevo nombre", value=comp_a_editar if personal_opciones else "").strip().upper()
+                btn_edit_comp = st.form_submit_button("🔄 Guardar Cambio de Nombre")
+                
+                if btn_edit_comp:
+                    if not nuevo_nombre_comp:
+                        st.warning("⚠️ Ingresa un nombre válido.")
+                    elif nuevo_nombre_comp == comp_a_editar:
+                        st.info("ℹ️ El nombre es el mismo, no se realizaron cambios.")
+                    else:
+                        try:
+                            supabase.table("personal").update({"nombre": nuevo_nombre_comp}).eq("nombre", comp_a_editar).execute()
+                            st.success(f"✅ ¡Nombre actualizado de {comp_a_editar} a {nuevo_nombre_comp}!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al editar: {e}")
+
             with st.form("form_eliminar_companera"):
                 st.write("❌ **Dar de baja compañera**")
-                comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones)
+                comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones, key="sel_del_comp")
                 btn_del_comp = st.form_submit_button("🗑️ Eliminar Compañera")
                 
                 if btn_del_comp:
