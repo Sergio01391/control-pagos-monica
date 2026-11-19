@@ -488,7 +488,7 @@ if pestana_config is not None:
 
             st.divider()
         else:
-            st.write("Administra los médicos, servicios y compañeras del personal.")
+            st.write("Agrega o edita médicos, servicios y compañeras del personal.")
         
         col_c1, col_c2 = st.columns(2)
         
@@ -529,21 +529,23 @@ if pestana_config is not None:
                         except Exception as e:
                             st.error(f"Error al editar: {e}")
 
-            with st.form("form_eliminar_medico"):
-                st.write("❌ **Dar de baja médico / servicio**")
-                medico_a_borrar = st.selectbox("Selecciona a quién eliminar", medicos_solo_nombres, key="sel_del_med")
-                btn_del_medico = st.form_submit_button("🗑️ Eliminar Médico")
-                
-                if btn_del_medico:
-                    if len(medicos_solo_nombres) <= 1:
-                        st.warning("⚠️ No puedes eliminar todos los registros.")
-                    else:
-                        try:
-                            supabase.table("medicos").delete().eq("nombre", medico_a_borrar).execute()
-                            st.success(f"🗑️ ¡{medico_a_borrar} eliminado con éxito!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error al eliminar: {e}")
+            # Dar de baja médico / servicio: SOLO visible para SERGIO
+            if es_superadmin:
+                with st.form("form_eliminar_medico"):
+                    st.write("❌ **Dar de baja médico / servicio**")
+                    medico_a_borrar = st.selectbox("Selecciona a quién eliminar", medicos_solo_nombres, key="sel_del_med")
+                    btn_del_medico = st.form_submit_button("🗑️ Eliminar Médico")
+                    
+                    if btn_del_medico:
+                        if len(medicos_solo_nombres) <= 1:
+                            st.warning("⚠️ No puedes eliminar todos los registros.")
+                        else:
+                            try:
+                                supabase.table("medicos").delete().eq("nombre", medico_a_borrar).execute()
+                                st.success(f"🗑️ ¡{medico_a_borrar} eliminado con éxito!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al eliminar: {e}")
                             
         with col_c2:
             st.write("👩‍💼 **Gestión de Compañeras (Personal)**")
@@ -582,21 +584,23 @@ if pestana_config is not None:
                         except Exception as e:
                             st.error(f"Error al editar: {e}")
 
-            with st.form("form_eliminar_companera"):
-                st.write("❌ **Dar de baja compañera**")
-                comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones, key="sel_del_comp")
-                btn_del_comp = st.form_submit_button("🗑️ Eliminar Compañera")
-                
-                if btn_del_comp:
-                    if len(personal_opciones) <= 1:
-                        st.warning("⚠️ No puedes eliminar a todos los miembros.")
-                    else:
-                        try:
-                            supabase.table("personal").delete().eq("nombre", comp_a_borrar).execute()
-                            st.success(f"🗑️ ¡Compañera {comp_a_borrar} eliminada con éxito!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error al eliminar: {e}")
+            # Dar de baja compañera: SOLO visible para SERGIO
+            if es_superadmin:
+                with st.form("form_eliminar_companera"):
+                    st.write("❌ **Dar de baja compañera**")
+                    comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones, key="sel_del_comp")
+                    btn_del_comp = st.form_submit_button("🗑️ Eliminar Compañera")
+                    
+                    if btn_del_comp:
+                        if len(personal_opciones) <= 1:
+                            st.warning("⚠️ No puedes eliminar a todos los miembros.")
+                        else:
+                            try:
+                                supabase.table("personal").delete().eq("nombre", comp_a_borrar).execute()
+                                st.success(f"🗑️ ¡Compañera {comp_a_borrar} eliminada con éxito!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al eliminar: {e}")
 
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state["autenticado"] = False
