@@ -75,7 +75,6 @@ def verificar_acceso():
                         else:
                             st.error("Usuario o contraseña incorrectos.")
                     except Exception:
-                        # Respaldo si la tabla usuarios aún no está creada en Supabase
                         if usuario_input == "monica" and password_input == "12345":
                             st.session_state["autenticado"] = True
                             st.session_state["usuario_actual"] = "MONICA"
@@ -97,7 +96,6 @@ def obtener_medicos():
             return ["Selecciona un médico o servicio..."] + sorted(lista)
     except Exception:
         pass
-    # Lista oficial de respaldo
     return [
         "Selecciona un médico o servicio...",
         "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
@@ -129,14 +127,15 @@ personal_opciones = obtener_personal()
 
 # --- 4. APLICACIÓN PRINCIPAL ---
 fecha_hora_actual = ahora_bolivia()
-fecha_hoy_str = str(fecha_hora_actual.date())
+fecha_hoy_date = fecha_hora_actual.date()
+fecha_hoy_str = str(fecha_hoy_date)
 
 st.title("💰 Control Diario de Pagos")
 st.write(f"Sesión activa: **{st.session_state['usuario_actual']}** | Fecha local: **{fecha_hora_actual.strftime('%d/%m/%Y %H:%M')}**")
 
 # --- TURNO AUTOMÁTICO SEGÚN LA HORA LOCAL DE BOLIVIA ---
 tiempo_en_minutos = fecha_hora_actual.hour * 60 + fecha_hora_actual.minute
-indice_turno_default = 1 if tiempo_en_minutos >= 1010 else 0  # Desde las 16:50 marca Turno Tarde
+indice_turno_default = 1 if tiempo_en_minutos >= 1010 else 0
 
 turno_actual = st.radio(
     "🕒 Turno Actual (Calculado Automáticamente por el Reloj)",
@@ -147,7 +146,7 @@ turno_actual = st.radio(
 
 st.divider()
 
-# Cuatro pestañas ordenadas: Registro, Cambios QR-Tarjetas, Cierre/Reportes, Configuración
+# Cuatro pestañas ordenadas
 pestana_registro, pestana_cambios, pestana_cierre, pestana_config = st.tabs([
     "📝 Registrar Nuevo Pago", 
     "🔄 Cambios QR-Tarjetas", 
@@ -164,7 +163,6 @@ with pestana_registro:
         quien_cancela = st.text_input("3. Nombre de quien cancela")
         tipo_pago = st.selectbox("4. Forma de Pago", ["EFECTIVO", "QR", "TARJETA"])
         
-        # Mantiene MONICA / MONI arriba si está en la lista
         opciones_entrega = personal_opciones if "MONI" in personal_opciones else ["MONI"] + [p for p in personal_opciones if p != "MONICA"]
         pagado_a = st.selectbox("5. ¿A quién se le entregó el dinero?", opciones_entrega)
         
@@ -204,6 +202,7 @@ with pestana_cambios:
     st.write("Registra aquí los intercambios o transferencias cruzadas de dinero.")
     
     with st.form("form_cambios", clear_on_submit=True):
+        fecha_cambio = st.date_input("Fecha del Cambio", value=fecha_hoy_date)
         tipo_cambio = st.selectbox("1. Tipo de Cambio", ["QR", "TARJETA"])
         descripcion = st.text_input("2. Descripción / Motivo (Opcional)", placeholder="Ej. Cambio de sencillo, devolución, etc.")
         
@@ -228,7 +227,7 @@ with pestana_cambios:
                     turno_automatico_cambio = "Turno Tarde" if ahora_camb.hour >= 17 else "Turno Mañana"
 
                     datos_cambio = {
-                        "fecha": str(ahora_camb.date()),
+                        "fecha": str(fecha_cambio),
                         "turno": turno_automatico_cambio,
                         "tipo_cambio": tipo_cambio,
                         "descripcion": descripcion if descripcion else "Sin descripción",
@@ -237,26 +236,39 @@ with pestana_cambios:
                         "monto": float(monto_cambio)
                     }
                     supabase.table("cambios").insert(datos_cambio).execute()
-                    st.success(f"✅ ¡Cambio registrado con éxito! ({tipo_cambio} - {monto_cambio} Bs)")
+                    st.success(f"✅ ¡Cambio registrado con éxito! ({fecha_cambio} | {turno_automatico_cambio} - {monto_cambio} Bs)")
                 except Exception as e:
                     st.error(f"Hubo un error al guardar el cambio: {e}")
                     
     st.divider()
-    st.subheader("📋 Cambios registrados hoy")
+    st.subheader("📋 Validar cambios registrados por fecha")
+    
+    col_val1, col_val2 = st.columns(2)
+    with col_val1:
+        fecha_validar_cambios = st.date_input("Selecciona la fecha a validar", value=fecha_hoy_date, key="fecha_val_cambios")
+    with col_val2:
+        filtro_turno_cambios = st.selectbox("Turno a validar", ["TODOS", "Turno Mañana", "Turno Tarde"], key="turno_val_cambios")
+        
     try:
-        resp_cambios = supabase.table("cambios").select("*").eq("fecha", fecha_hoy_str).eq("turno", turno_actual).execute()
+        query_cambios = supabase.table("cambios").select("*").eq("fecha", str(fecha_validar_cambios))
+        if filtro_turno_cambios != "TODOS":
+            query_cambios = query_cambios.eq("turno", filtro_turno_cambios)
+        resp_cambios = query_cambios.execute()
+        
         if resp_cambios.data:
-            st.dataframe(resp_cambios.data, use_container_width=True)
+            df_cambios = pd.DataFrame(resp_cambios.data)
+            total_cambios = df_cambios["monto"].sum() if "monto" in df_cambios.columns else 0
+            st.metric(label="🔄 Total Cambios en Fecha/Turno Seleccionado", value=f"{total_cambios:.2f} Bs")
+            st.dataframe(df_cambios, use_container_width=True)
         else:
-            st.info("No hay cambios QR/Tarjetas registrados en este turno hoy.")
+            st.info("No hay cambios QR/Tarjetas registrados para la fecha y turno seleccionados.")
     except Exception:
         st.info("Configura la tabla 'cambios' en Supabase para ver el historial.")
 
 with pestana_cierre:
     st.subheader("📊 Resumen para Cierre de Caja y Filtros")
     
-    # Selector de fecha para auditar (usando fecha local de Bolivia)
-    fecha_consulta = st.date_input("Selecciona la fecha a revisar", fecha_hora_actual.date())
+    fecha_consulta = st.date_input("Selecciona la fecha a revisar", fecha_hoy_date)
     
     try:
         respuesta = supabase.table("pagos").select("*").eq("fecha", str(fecha_consulta)).execute()
@@ -303,7 +315,6 @@ with pestana_cierre:
             st.write(f"📋 **Resultados ({len(df_filtrado)} registros encontrados):**")
             st.dataframe(df_filtrado, use_container_width=True)
             
-            # --- SECCIÓN: MODIFICAR O ELIMINAR REGISTROS ---
             st.divider()
             with st.expander("⚙️ ¿Necesitas corregir paciente, médico, monto, tipo de pago o eliminar un registro?"):
                 st.write("Selecciona el paciente y monto correspondiente:")
@@ -381,7 +392,6 @@ with pestana_cierre:
                 else:
                     st.warning("No hay registros disponibles para modificar con los filtros actuales.")
 
-            # --- BOTÓN DE EXPORTAR A EXCEL REAL (.XLSX) ---
             st.divider()
             
             output = io.BytesIO()
@@ -405,7 +415,6 @@ with pestana_config:
     st.subheader("⚙️ Configuración y Gestión General")
     st.write("Administra los usuarios de acceso, los médicos y el personal.")
     
-    # Sección de Usuarios para el Login
     st.write("🔑 **Gestión de Usuarios de Acceso**")
     col_u1, col_u2 = st.columns(2)
     
@@ -505,7 +514,6 @@ with pestana_config:
                     except Exception as e:
                         st.error(f"Error al eliminar: {e}")
 
-# Botón lateral para salir
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
