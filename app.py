@@ -25,12 +25,17 @@ supabase = init_connection()  # Inicializa el cliente de la base de datos
 st.set_page_config(
     page_title="Control de Pagos - Mónica",  # Título en la pestaña del navegador
     page_icon="💰",  # Ícono de la pestaña
-    layout="centered"  # Centra el diseño en la pantalla
+    layout="centered",  # Centra el diseño en la pantalla
+    initial_sidebar_state="collapsed"
 )
 
-# Estilo visual personalizado para los botones (grandes y verdes)
+# Estilo visual personalizado para los botones (grandes y verdes) y ocultar panel lateral
 st.markdown("""
     <style>
+    [data-testid="stSidebar"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
     .stButton>button {
         width: 100%;
         background-color: #2e7d32;
@@ -574,7 +579,7 @@ if pestana_config is not None:
                             st.success("✅ ¡Compañera agregada con éxito!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error: ** {e}")
+                            st.error(f"Error: {e}")
 
             with st.form("form_editar_companera"):
                 st.write("✏️ **Editar nombre de compañera**")
@@ -612,6 +617,3 @@ if pestana_config is not None:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al eliminar: {e}")
-
-if st.sidebar.button("Cerrar Sesión", key="btn_salir_sidebar"):
-    cerrar_sesion()
