@@ -35,10 +35,10 @@ st.markdown("""
         width: 100%;
         background-color: #2e7d32;
         color: white;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: bold;
         border-radius: 8px;
-        padding: 10px;
+        padding: 8px 12px;
     }
     .stButton>button:hover {
         background-color: #1b5e20;
@@ -46,6 +46,11 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+def cerrar_sesion():
+    st.session_state["autenticado"] = False
+    st.session_state["usuario_actual"] = ""
+    st.rerun()
 
 # --- 3. SEGURIDAD DINÁMICA CON USUARIOS DE SUPABASE ---
 def verificar_acceso():
@@ -141,7 +146,13 @@ fecha_hora_actual = ahora_bolivia()
 fecha_hoy_date = fecha_hora_actual.date()
 fecha_hoy_str = str(fecha_hoy_date)
 
-st.title("💰 Control Diario de Pagos")
+col_titulo, col_salir = st.columns([4, 1.3], vertical_alignment="center")
+with col_titulo:
+    st.title("💰 Control Diario de Pagos")
+with col_salir:
+    if st.button("🚪 Cerrar Sesión", key="btn_salir_top"):
+        cerrar_sesion()
+
 st.write(f"Sesión activa: **{st.session_state['usuario_actual']}** | Fecha local: **{fecha_hora_actual.strftime('%d/%m/%Y %H:%M')}**")
 
 # --- TURNO AUTOMÁTICO SEGÚN LA HORA LOCAL DE BOLIVIA ---
@@ -563,7 +574,7 @@ if pestana_config is not None:
                             st.success("✅ ¡Compañera agregada con éxito!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            st.error(f"Error: ** {e}")
 
             with st.form("form_editar_companera"):
                 st.write("✏️ **Editar nombre de compañera**")
@@ -602,7 +613,5 @@ if pestana_config is not None:
                             except Exception as e:
                                 st.error(f"Error al eliminar: {e}")
 
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state["autenticado"] = False
-    st.session_state["usuario_actual"] = ""
-    st.rerun()
+if st.sidebar.button("Cerrar Sesión", key="btn_salir_sidebar"):
+    cerrar_sesion()
