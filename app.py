@@ -75,9 +75,14 @@ def verificar_acceso():
                         else:
                             st.error("Usuario o contraseña incorrectos.")
                     except Exception:
+                        # Respaldo en caso de fallo de conexión con tabla usuarios
                         if usuario_input == "monica" and password_input == "12345":
                             st.session_state["autenticado"] = True
                             st.session_state["usuario_actual"] = "MONICA"
+                            st.rerun()
+                        elif usuario_input == "sergio" and password_input == "sergio123":
+                            st.session_state["autenticado"] = True
+                            st.session_state["usuario_actual"] = "SERGIO"
                             st.rerun()
                         else:
                             st.error("Usuario o contraseña incorrectos.")
@@ -87,7 +92,9 @@ def verificar_acceso():
 if not verificar_acceso():
     st.stop()
 
-es_monica = (st.session_state.get("usuario_actual", "").strip().upper() == "MONICA")
+# Solo SERGIO tiene acceso a Configuración
+es_admin = (st.session_state.get("usuario_actual", "").strip().upper() == "SERGIO")
+USUARIOS_PROTEGIDOS = {"monica", "sergio"}
 
 # --- FUNCIONES PARA CARGAR DATOS DINÁMICAMENTE DESDE SUPABASE ---
 def obtener_medicos():
@@ -149,18 +156,18 @@ turno_actual = st.radio(
 
 st.divider()
 
-# Pestañas dinámicas: Configuración solo visible para MONICA
+# Pestañas dinámicas: Configuración solo visible para SERGIO
 nombres_pestanas = [
     "📝 Registrar Nuevo Pago", 
     "🔄 Cambios QR-Tarjetas", 
     "📊 Ver Cierre de Caja y Reportes"
 ]
-if es_monica:
+if es_admin:
     nombres_pestanas.append("⚙️ Configuración")
 
 pestanas = st.tabs(nombres_pestanas)
 pestana_registro, pestana_cambios, pestana_cierre = pestanas[0], pestanas[1], pestanas[2]
-pestana_config = pestanas[3] if es_monica else None
+pestana_config = pestanas[3] if es_admin else None
 
 with pestana_registro:
     st.subheader(f"Nuevo registro para: **{turno_actual}**")
@@ -438,8 +445,8 @@ if pestana_config is not None:
                 if btn_add_user:
                     if not nuevo_user or not nuevo_pass:
                         st.warning("⚠️ Llena ambos campos.")
-                    elif nuevo_user == "monica":
-                        st.warning("⚠️ El usuario 'monica' ya existe y está protegido.")
+                    elif nuevo_user in USUARIOS_PROTEGIDOS:
+                        st.warning(f"⚠️ El usuario '{nuevo_user}' ya existe y está protegido.")
                     else:
                         try:
                             supabase.table("usuarios").insert({"nombre_usuario": nuevo_user, "password": nuevo_pass}).execute()
@@ -453,7 +460,7 @@ if pestana_config is not None:
                 resp_users = supabase.table("usuarios").select("nombre_usuario").execute()
                 lista_usuarios_db = [
                     u["nombre_usuario"] for u in resp_users.data
-                    if u.get("nombre_usuario", "").strip().lower() != "monica"
+                    if u.get("nombre_usuario", "").strip().lower() not in USUARIOS_PROTEGIDOS
                 ] if resp_users.data else []
             except Exception:
                 lista_usuarios_db = []
@@ -465,8 +472,8 @@ if pestana_config is not None:
                     btn_del_user = st.form_submit_button("Revocar Acceso")
                     
                     if btn_del_user:
-                        if user_a_borrar.strip().lower() == "monica":
-                            st.warning("⚠️ El usuario 'monica' no puede eliminarse.")
+                        if user_a_borrar.strip().lower() in USUARIOS_PROTEGIDOS:
+                            st.warning(f"⚠️ El usuario '{user_a_borrar}' está protegido y no puede eliminarse.")
                         else:
                             try:
                                 supabase.table("usuarios").delete().eq("nombre_usuario", user_a_borrar).execute()
@@ -475,7 +482,7 @@ if pestana_config is not None:
                             except Exception as e:
                                 st.error(f"Error: {e}")
                 else:
-                    st.info("No hay otros usuarios creados para revocar ('monica' está protegida).")
+                    st.info("No hay otros usuarios creados para revocar ('monica' y 'sergio' están protegidos).")
 
         st.divider()
         
