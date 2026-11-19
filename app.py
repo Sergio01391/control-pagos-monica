@@ -92,8 +92,9 @@ def verificar_acceso():
 if not verificar_acceso():
     st.stop()
 
-# Solo SERGIO tiene acceso a Configuración
-es_admin = (st.session_state.get("usuario_actual", "").strip().upper() == "SERGIO")
+usuario_logueado = st.session_state.get("usuario_actual", "").strip().upper()
+es_superadmin = (usuario_logueado == "SERGIO")
+puede_ver_config = usuario_logueado in {"SERGIO", "MONICA"}
 USUARIOS_PROTEGIDOS = {"monica", "sergio"}
 
 # --- FUNCIONES PARA CARGAR DATOS DINÁMICAMENTE DESDE SUPABASE ---
@@ -156,18 +157,18 @@ turno_actual = st.radio(
 
 st.divider()
 
-# Pestañas dinámicas: Configuración solo visible para SERGIO
+# Pestañas dinámicas: Configuración visible para SERGIO y MONICA
 nombres_pestanas = [
     "📝 Registrar Nuevo Pago", 
     "🔄 Cambios QR-Tarjetas", 
     "📊 Ver Cierre de Caja y Reportes"
 ]
-if es_admin:
+if puede_ver_config:
     nombres_pestanas.append("⚙️ Configuración")
 
 pestanas = st.tabs(nombres_pestanas)
 pestana_registro, pestana_cambios, pestana_cierre = pestanas[0], pestanas[1], pestanas[2]
-pestana_config = pestanas[3] if es_admin else None
+pestana_config = pestanas[3] if puede_ver_config else None
 
 with pestana_registro:
     st.subheader(f"Nuevo registro para: **{turno_actual}**")
@@ -429,62 +430,65 @@ with pestana_cierre:
 if pestana_config is not None:
     with pestana_config:
         st.subheader("⚙️ Configuración y Gestión General")
-        st.write("Administra los usuarios de acceso, los médicos y el personal.")
         
-        # Sección de Usuarios para el Login
-        st.write("🔑 **Gestión de Usuarios de Acceso**")
-        col_u1, col_u2 = st.columns(2)
-        
-        with col_u1:
-            with st.form("form_nuevo_usuario", clear_on_submit=True):
-                st.write("➕ **Crear Nuevo Usuario**")
-                nuevo_user = st.text_input("Nombre de Usuario (Ej: janet)").strip().lower()
-                nuevo_pass = st.text_input("Contraseña", type="password")
-                btn_add_user = st.form_submit_button("Crear Acceso")
-                
-                if btn_add_user:
-                    if not nuevo_user or not nuevo_pass:
-                        st.warning("⚠️ Llena ambos campos.")
-                    elif nuevo_user in USUARIOS_PROTEGIDOS:
-                        st.warning(f"⚠️ El usuario '{nuevo_user}' ya existe y está protegido.")
-                    else:
-                        try:
-                            supabase.table("usuarios").insert({"nombre_usuario": nuevo_user, "password": nuevo_pass}).execute()
-                            st.success(f"✅ ¡Usuario '{nuevo_user}' creado con éxito!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                            
-        with col_u2:
-            try:
-                resp_users = supabase.table("usuarios").select("nombre_usuario").execute()
-                lista_usuarios_db = [
-                    u["nombre_usuario"] for u in resp_users.data
-                    if u.get("nombre_usuario", "").strip().lower() not in USUARIOS_PROTEGIDOS
-                ] if resp_users.data else []
-            except Exception:
-                lista_usuarios_db = []
-                
-            with st.form("form_del_usuario"):
-                st.write("❌ **Eliminar Acceso de Usuario**")
-                if lista_usuarios_db:
-                    user_a_borrar = st.selectbox("Selecciona usuario a revocar", lista_usuarios_db)
-                    btn_del_user = st.form_submit_button("Revocar Acceso")
+        # Bloque de Gestión de Usuarios: SOLO visible para SERGIO
+        if es_superadmin:
+            st.write("Administra los usuarios de acceso, los médicos y el personal.")
+            st.write("🔑 **Gestión de Usuarios de Acceso**")
+            col_u1, col_u2 = st.columns(2)
+            
+            with col_u1:
+                with st.form("form_nuevo_usuario", clear_on_submit=True):
+                    st.write("➕ **Crear Nuevo Usuario**")
+                    nuevo_user = st.text_input("Nombre de Usuario (Ej: janet)").strip().lower()
+                    nuevo_pass = st.text_input("Contraseña", type="password")
+                    btn_add_user = st.form_submit_button("Crear Acceso")
                     
-                    if btn_del_user:
-                        if user_a_borrar.strip().lower() in USUARIOS_PROTEGIDOS:
-                            st.warning(f"⚠️ El usuario '{user_a_borrar}' está protegido y no puede eliminarse.")
+                    if btn_add_user:
+                        if not nuevo_user or not nuevo_pass:
+                            st.warning("⚠️ Llena ambos campos.")
+                        elif nuevo_user in USUARIOS_PROTEGIDOS:
+                            st.warning(f"⚠️ El usuario '{nuevo_user}' ya existe y está protegido.")
                         else:
                             try:
-                                supabase.table("usuarios").delete().eq("nombre_usuario", user_a_borrar).execute()
-                                st.success(f"🗑️ ¡Acceso revocado para '{user_a_borrar}'!")
+                                supabase.table("usuarios").insert({"nombre_usuario": nuevo_user, "password": nuevo_pass}).execute()
+                                st.success(f"✅ ¡Usuario '{nuevo_user}' creado con éxito!")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error: {e}")
-                else:
-                    st.info("No hay otros usuarios creados para revocar ('monica' y 'sergio' están protegidos).")
+                                
+            with col_u2:
+                try:
+                    resp_users = supabase.table("usuarios").select("nombre_usuario").execute()
+                    lista_usuarios_db = [
+                        u["nombre_usuario"] for u in resp_users.data
+                        if u.get("nombre_usuario", "").strip().lower() not in USUARIOS_PROTEGIDOS
+                    ] if resp_users.data else []
+                except Exception:
+                    lista_usuarios_db = []
+                    
+                with st.form("form_del_usuario"):
+                    st.write("❌ **Eliminar Acceso de Usuario**")
+                    if lista_usuarios_db:
+                        user_a_borrar = st.selectbox("Selecciona usuario a revocar", lista_usuarios_db)
+                        btn_del_user = st.form_submit_button("Revocar Acceso")
+                        
+                        if btn_del_user:
+                            if user_a_borrar.strip().lower() in USUARIOS_PROTEGIDOS:
+                                st.warning(f"⚠️ El usuario '{user_a_borrar}' está protegido y no puede eliminarse.")
+                            else:
+                                try:
+                                    supabase.table("usuarios").delete().eq("nombre_usuario", user_a_borrar).execute()
+                                    st.success(f"🗑️ ¡Acceso revocado para '{user_a_borrar}'!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                    else:
+                        st.info("No hay otros usuarios creados para revocar ('monica' y 'sergio' están protegidos).")
 
-        st.divider()
+            st.divider()
+        else:
+            st.write("Administra los médicos, servicios y compañeras del personal.")
         
         col_c1, col_c2 = st.columns(2)
         
