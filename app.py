@@ -1,5 +1,5 @@
 import streamlit as st  # Importa Streamlit para la interfaz web
-from datetime import datetime  # Importa la gestión de fechas del sistema
+from datetime import datetime  # Importa la gestión de fechas y horas
 from zoneinfo import ZoneInfo  # Zona horaria nativa de Python (sin librerías extra)
 from supabase import create_client, Client  # Importa la librería para conectar con Supabase
 import pandas as pd  # Importa Pandas para manejar tablas
@@ -47,66 +47,112 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. SEGURIDAD SENCILLA (Contraseña para Mónica) ---
+# --- 3. SEGURIDAD DINÁMICA CON USUARIOS DE SUPABASE ---
 def verificar_acceso():
     if "autenticado" not in st.session_state:
-        st.session_state["autenticado"] = False  # Estado inicial de sesión cerrada
+        st.session_state["autenticado"] = False
+        st.session_state["usuario_actual"] = ""
 
     if not st.session_state["autenticado"]:
         st.title("🔐 Sistema de Control de Pagos")
-        st.write("Hola Mónica, por favor ingresa tu contraseña para comenzar:")
+        st.write("Por favor ingresa tus datos de acceso:")
         
-        st.text_input("Usuario", value="monica", disabled=True)  # Usuario fijo
-        password = st.text_input("Contraseña", type="password")  # Campo seguro de contraseña
-        
-        if st.button("Entrar al Sistema"):
-            if password == "12345":  # Contraseña de acceso
-                st.session_state["autenticado"] = True
-                st.rerun()  # Recarga la app al ingresar bien
-            else:
-                st.error("Contraseña incorrecta. Inténtalo de nuevo.")
+        with st.form("form_login"):
+            usuario_input = st.text_input("Usuario").strip().lower()
+            password_input = st.text_input("Contraseña", type="password")
+            btn_entrar = st.form_submit_button("Entrar al Sistema")
+            
+            if btn_entrar:
+                if not usuario_input or not password_input:
+                    st.warning("⚠️ Ingresa usuario y contraseña.")
+                else:
+                    try:
+                        resp = supabase.table("usuarios").select("*").eq("nombre_usuario", usuario_input).eq("password", password_input).execute()
+                        if resp.data:
+                            st.session_state["autenticado"] = True
+                            st.session_state["usuario_actual"] = usuario_input.upper()
+                            st.rerun()
+                        else:
+                            st.error("Usuario o contraseña incorrectos.")
+                    except Exception:
+                        # Respaldo si la tabla usuarios aún no está creada en Supabase
+                        if usuario_input == "monica" and password_input == "12345":
+                            st.session_state["autenticado"] = True
+                            st.session_state["usuario_actual"] = "MONICA"
+                            st.rerun()
+                        else:
+                            st.error("Usuario o contraseña incorrectos.")
         return False
     return True
 
 if not verificar_acceso():
-    st.stop()  # Detiene la ejecución si no ha puesto la contraseña
+    st.stop()
 
-# Lista oficial exacta de médicos y servicios (reutilizable)
-lista_medicos = [
-    "Selecciona un médico o servicio...",
-    "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
-    "DRA INES RAMIREZ", "DRA CARLA SAAVEDRA", "DR CRISTIAN ATUE", "DRA ANNELIS CAZON",
-    "DR WILDER INTURIAS", "DR MARCELO TORRICO", "DR JUAN CARLOS GIL", "DRA CORAL RUIZ",
-    "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DRA ALEXANDRA ROMAN",
-    "DR ELIGIO ARCIENEGA", "DR CARLOS BROCKMAN", "DR DANIEL MENDIETA", "DR ALEJANDRO TORRICO",
-    "DRA MARIA LOURDES CORNEJO", "DRA KARINA CARTAGENA", "DA ANA CLAROS", "LIC ELBA GAMBOA",
-    "DR DIEGO ANTEZANA", "LIC SOFIA REYNOSO", "DR ERICK SALAS", "DR GEOFRI VELASQUEZ",
-    "DR JAVIER ENCINAS", "DRA PATRICIA PEÑA", "DR COCA", "DR RONALD APARICIO",
-    "DRA CARMEN ARAUCO", "DR MARIO SAAVEDRA", "DR RODRIGO PINTO", "DR FRANZ SANJINEZ",
-    "DR PABLO CESPEDES", "DR JHONNY RIOS", "DRA ANA FLORES", "DR RAMIRO ROJAS",
-    "DR MARIO URQUIDI", "LIC ROXANA ALBA", "DR REMY URIONA", "DR JIMMY ACEVEDO",
-    "ENFERMERIA", "ECOGRAFIA", "RX", "TOMOGRAFIA", "PAP", "HISTOPATOLOGIA",
-    "ELECTROCARDIOGRAMA", "ECOCARDIOGRAMA", "UROFLUJOMETRIA", "EXPENSAS", "LABORATORIO"
-]
+# --- FUNCIONES PARA CARGAR DATOS DINÁMICAMENTE DESDE SUPABASE ---
+def obtener_medicos():
+    try:
+        resp = supabase.table("medicos").select("nombre").execute()
+        if resp.data:
+            lista = [m["nombre"] for m in resp.data]
+            return ["Selecciona un médico o servicio..."] + sorted(lista)
+    except Exception:
+        pass
+    # Lista oficial de respaldo
+    return [
+        "Selecciona un médico o servicio...",
+        "DR DANIEL COSCIO", "DR RAUL COSCIO", "DR GASTON CORNEJO", "DR SERGIO APARICIO",
+        "DRA INES RAMIREZ", "DRA CARLA SAAVEDRA", "DR CRISTIAN ATUE", "DRA ANNELIS CAZON",
+        "DR WILDER INTURIAS", "DR MARCELO TORRICO", "DR JUAN CARLOS GIL", "DRA CORAL RUIZ",
+        "DRA ROSARIO CASTRO", "DR OMAR ANGULO", "DR HUMBERTO GARCIA", "DRA ALEXANDRA ROMAN",
+        "DR ELIGIO ARCIENEGA", "DR CARLOS BROCKMAN", "DR DANIEL MENDIETA", "DR ALEJANDRO TORRICO",
+        "DRA MARIA LOURDES CORNEJO", "DRA KARINA CARTAGENA", "DA ANA CLAROS", "LIC ELBA GAMBOA",
+        "DR DIEGO ANTEZANA", "LIC SOFIA REYNOSO", "DR ERICK SALAS", "DR GEOFRI VELASQUEZ",
+        "DR JAVIER ENCINAS", "DRA PATRICIA PEÑA", "DR COCA", "DR RONALD APARICIO",
+        "DRA CARMEN ARAUCO", "DR MARIO SAAVEDRA", "DR RODRIGO PINTO", "DR FRANZ SANJINEZ",
+        "DR PABLO CESPEDES", "DR JHONNY RIOS", "DRA ANA FLORES", "DR RAMIRO ROJAS",
+        "DR MARIO URQUIDI", "LIC ROXANA ALBA", "DR REMY URIONA", "DR JIMMY ACEVEDO",
+        "ENFERMERIA", "ECOGRAFIA", "RX", "TOMOGRAFIA", "PAP", "HISTOPATOLOGIA",
+        "ELECTROCARDIOGRAMA", "ECOCARDIOGRAMA", "UROFLUJOMETRIA", "EXPENSAS", "LABORATORIO"
+    ]
+
+def obtener_personal():
+    try:
+        resp = supabase.table("personal").select("nombre").execute()
+        if resp.data:
+            return sorted([p["nombre"] for p in resp.data])
+    except Exception:
+        pass
+    return ["MONICA", "JANET", "PATRICIA", "KARLA", "ADRIANA", "ZULEMA"]
+
+lista_medicos = obtener_medicos()
+personal_opciones = obtener_personal()
 
 # --- 4. APLICACIÓN PRINCIPAL ---
-st.title("💰 Control Diario de Pagos")
-st.write("Registra tus cobros rápido y sin enredos para que el cierre de caja salga perfecto.")
+fecha_hora_actual = ahora_bolivia()
+fecha_hoy_str = str(fecha_hora_actual.date())
 
-# Selector horizontal de turnos para evitar confusiones
+st.title("💰 Control Diario de Pagos")
+st.write(f"Sesión activa: **{st.session_state['usuario_actual']}** | Fecha local: **{fecha_hora_actual.strftime('%d/%m/%Y %H:%M')}**")
+
+# --- TURNO AUTOMÁTICO SEGÚN LA HORA LOCAL DE BOLIVIA ---
+tiempo_en_minutos = fecha_hora_actual.hour * 60 + fecha_hora_actual.minute
+indice_turno_default = 1 if tiempo_en_minutos >= 1010 else 0  # Desde las 16:50 marca Turno Tarde
+
 turno_actual = st.radio(
-    "🕒 ¿En qué turno estás ahora?",
+    "🕒 Turno Actual (Calculado Automáticamente por el Reloj)",
     ["Turno Mañana", "Turno Tarde"],
+    index=indice_turno_default,
     horizontal=True
 )
 
 st.divider()
 
-# Tres pestañas ordenadas: Registro, Cambios de QR/Tarjetas, y Cierre/Reportes
-pestana_registro, pestana_cambios, pestana_cierre = st.tabs([
+# Cuatro pestañas ordenadas: Registro, Cambios QR-Tarjetas, Cierre/Reportes, Configuración
+pestana_registro, pestana_cambios, pestana_cierre, pestana_config = st.tabs([
     "📝 Registrar Nuevo Pago", 
     "🔄 Cambios QR-Tarjetas", 
-    "📊 Ver Cierre de Caja y Reportes"
+    "📊 Ver Cierre de Caja y Reportes",
+    "⚙️ Configuración"
 ])
 
 with pestana_registro:
@@ -118,8 +164,9 @@ with pestana_registro:
         quien_cancela = st.text_input("3. Nombre de quien cancela")
         tipo_pago = st.selectbox("4. Forma de Pago", ["EFECTIVO", "QR", "TARJETA"])
         
-        # MONI colocada arriba por defecto en la opción 5
-        pagado_a = st.selectbox("5. ¿A quién se le entregó el dinero?", ["MONI", "JANET", "PATI"])
+        # Mantiene MONICA / MONI arriba si está en la lista
+        opciones_entrega = personal_opciones if "MONI" in personal_opciones else ["MONI"] + [p for p in personal_opciones if p != "MONICA"]
+        pagado_a = st.selectbox("5. ¿A quién se le entregó el dinero?", opciones_entrega)
         
         monto = st.number_input("6. Monto Pagado (Bs.)", min_value=0.0, step=10.0, format="%.2f")
         
@@ -134,9 +181,12 @@ with pestana_registro:
                 st.warning("⚠️ El monto debe ser mayor a 0.")
             else:
                 try:
+                    ahora_reg = ahora_bolivia()
+                    turno_automatico = "Turno Tarde" if ahora_reg.hour >= 17 else "Turno Mañana"
+
                     datos_a_guardar = {
-                        "fecha": str(ahora_bolivia().date()),
-                        "turno": turno_actual,
+                        "fecha": str(ahora_reg.date()),
+                        "turno": turno_automatico,
                         "medico": medico,
                         "paciente": paciente,
                         "quien_cancela": quien_cancela,
@@ -145,7 +195,7 @@ with pestana_registro:
                         "monto": float(monto)
                     }
                     supabase.table("pagos").insert(datos_a_guardar).execute()
-                    st.success(f"✅ ¡Pago guardado con éxito! ({turno_actual} - {monto} Bs)")
+                    st.success(f"✅ ¡Pago guardado con éxito! ({turno_automatico} - {monto} Bs)")
                 except Exception as e:
                     st.error(f"Hubo un error al guardar en la base de datos: {e}")
 
@@ -156,8 +206,6 @@ with pestana_cambios:
     with st.form("form_cambios", clear_on_submit=True):
         tipo_cambio = st.selectbox("1. Tipo de Cambio", ["QR", "TARJETA"])
         descripcion = st.text_input("2. Descripción / Motivo (Opcional)", placeholder="Ej. Cambio de sencillo, devolución, etc.")
-        
-        personal_opciones = ["MONICA", "JANET", "PATRICIA", "KARLA", "ADRIANA", "ZULEMA"]
         
         col_orig, col_dest = st.columns(2)
         with col_orig:
@@ -176,9 +224,12 @@ with pestana_cambios:
                 st.warning("⚠️ El monto debe ser mayor a 0.")
             else:
                 try:
+                    ahora_camb = ahora_bolivia()
+                    turno_automatico_cambio = "Turno Tarde" if ahora_camb.hour >= 17 else "Turno Mañana"
+
                     datos_cambio = {
-                        "fecha": str(ahora_bolivia().date()),
-                        "turno": turno_actual,
+                        "fecha": str(ahora_camb.date()),
+                        "turno": turno_automatico_cambio,
                         "tipo_cambio": tipo_cambio,
                         "descripcion": descripcion if descripcion else "Sin descripción",
                         "origen": origen,
@@ -193,27 +244,26 @@ with pestana_cambios:
     st.divider()
     st.subheader("📋 Cambios registrados hoy")
     try:
-        resp_cambios = supabase.table("cambios").select("*").eq("fecha", str(ahora_bolivia().date())).eq("turno", turno_actual).execute()
+        resp_cambios = supabase.table("cambios").select("*").eq("fecha", fecha_hoy_str).eq("turno", turno_actual).execute()
         if resp_cambios.data:
             st.dataframe(resp_cambios.data, use_container_width=True)
         else:
             st.info("No hay cambios QR/Tarjetas registrados en este turno hoy.")
-    except:
+    except Exception:
         st.info("Configura la tabla 'cambios' en Supabase para ver el historial.")
 
 with pestana_cierre:
     st.subheader("📊 Resumen para Cierre de Caja y Filtros")
     
     # Selector de fecha para auditar (usando fecha local de Bolivia)
-    fecha_consulta = st.date_input("Selecciona la fecha a revisar", ahora_bolivia().date())
+    fecha_consulta = st.date_input("Selecciona la fecha a revisar", fecha_hora_actual.date())
     
     try:
-        # Traemos todos los registros del día seleccionado
         respuesta = supabase.table("pagos").select("*").eq("fecha", str(fecha_consulta)).execute()
         registros = respuesta.data
         
         if registros:
-            df = pd.DataFrame(registros) # Convertimos los datos a una tabla inteligente de Pandas
+            df = pd.DataFrame(registros)
             
             st.divider()
             st.write("🔍 **Filtros de Búsqueda Rápida:**")
@@ -222,13 +272,11 @@ with pestana_cierre:
             with col_f1:
                 filtro_turno = st.selectbox("Filtrar por Turno", ["TODOS", "Turno Mañana", "Turno Tarde"])
             with col_f2:
-                # Lista única de médicos presentes en los registros del día
-                medicos_disponibles = ["TODOS"] + list(df["medico"].unique())
+                medicos_disponibles = ["TODOS"] + sorted(list(df["medico"].unique()))
                 filtro_medico = st.selectbox("Filtrar por Médico", medicos_disponibles)
             with col_f3:
                 filtro_pago = st.selectbox("Filtrar por Tipo de Pago", ["TODOS", "EFECTIVO", "QR", "TARJETA"])
             
-            # Aplicar los filtros seleccionados a la tabla
             df_filtrado = df.copy()
             if filtro_turno != "TODOS":
                 df_filtrado = df_filtrado[df_filtrado["turno"] == filtro_turno]
@@ -239,12 +287,10 @@ with pestana_cierre:
             
             st.divider()
             
-            # Calcular totales basados en lo que está filtrado en pantalla
             total_efectivo = df_filtrado[df_filtrado["tipo_pago"] == "EFECTIVO"]["monto"].sum() if not df_filtrado.empty else 0
             total_qr = df_filtrado[df_filtrado["tipo_pago"] == "QR"]["monto"].sum() if not df_filtrado.empty else 0
             total_tarjeta = df_filtrado[df_filtrado["tipo_pago"] == "TARJETA"]["monto"].sum() if not df_filtrado.empty else 0
             
-            # Tarjetas métricas con totales
             m1, m2, m3 = st.columns(3)
             with m1:
                 st.metric(label="💵 Efectivo Filtrado", value=f"{total_efectivo:.2f} Bs")
@@ -282,10 +328,8 @@ with pestana_cierre:
                         with st.form(f"form_editar_{id_a_gestionar}"):
                             st.write("✏️ **Modificar Datos del Pago**")
                             
-                            # Nuevos campos editables: Paciente y Médico
                             nuevo_paciente = st.text_input("Nombre del Paciente", value=str(reg_actual['paciente']))
                             
-                            # Seleccionar médico actual por defecto
                             medico_actual = reg_actual['medico']
                             indice_medico = lista_medicos.index(medico_actual) if medico_actual in lista_medicos else 0
                             nuevo_medico = st.selectbox("Médico Tratante / Servicio", lista_medicos, index=indice_medico)
@@ -354,10 +398,115 @@ with pestana_cierre:
         else:
             st.info("No hay registros guardados para la fecha seleccionada.")
             
-    except Exception as e:
+    except Exception:
         st.info("Registra algunos pagos para habilitar los reportes y filtros.")
+
+with pestana_config:
+    st.subheader("⚙️ Configuración y Gestión General")
+    st.write("Administra los usuarios de acceso, los médicos y el personal.")
+    
+    # Sección de Usuarios para el Login
+    st.write("🔑 **Gestión de Usuarios de Acceso**")
+    col_u1, col_u2 = st.columns(2)
+    
+    with col_u1:
+        with st.form("form_nuevo_usuario", clear_on_submit=True):
+            st.write("➕ **Crear Nuevo Usuario**")
+            nuevo_user = st.text_input("Nombre de Usuario (Ej: janet)").strip().lower()
+            nuevo_pass = st.text_input("Contraseña", type="password")
+            btn_add_user = st.form_submit_button("Crear Acceso")
+            
+            if btn_add_user:
+                if not nuevo_user or not nuevo_pass:
+                    st.warning("⚠️ Llena ambos campos.")
+                else:
+                    try:
+                        supabase.table("usuarios").insert({"nombre_usuario": nuevo_user, "password": nuevo_pass}).execute()
+                        st.success(f"✅ ¡Usuario '{nuevo_user}' creado con éxito!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        
+    with col_u2:
+        try:
+            resp_users = supabase.table("usuarios").select("nombre_usuario").execute()
+            lista_usuarios_db = [u["nombre_usuario"] for u in resp_users.data] if resp_users.data else ["monica"]
+        except Exception:
+            lista_usuarios_db = ["monica"]
+            
+        with st.form("form_del_usuario"):
+            st.write("❌ **Eliminar Acceso de Usuario**")
+            user_a_borrar = st.selectbox("Selecciona usuario a revocar", lista_usuarios_db)
+            btn_del_user = st.form_submit_button("Revocar Acceso")
+            
+            if btn_del_user:
+                if user_a_borrar == "monica":
+                    st.warning("⚠️ No puedes eliminar al usuario principal 'monica'.")
+                else:
+                    try:
+                        supabase.table("usuarios").delete().eq("nombre_usuario", user_a_borrar).execute()
+                        st.success(f"🗑️ ¡Acceso revocado para '{user_a_borrar}'!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+    st.divider()
+    
+    col_c1, col_c2 = st.columns(2)
+    
+    with col_c1:
+        st.write("👨‍⚕️ **Médicos y Servicios**")
+        with st.form("form_nuevo_medico", clear_on_submit=True):
+            nuevo_medico_input = st.text_input("Agregar Nuevo Médico")
+            btn_add_medico = st.form_submit_button("➕ Registrar Médico")
+            
+            if btn_add_medico:
+                if not nuevo_medico_input:
+                    st.warning("⚠️ Ingresa un nombre válido.")
+                else:
+                    try:
+                        supabase.table("medicos").insert({"nombre": nuevo_medico_input.strip().upper()}).execute()
+                        st.success("✅ ¡Médico agregado con éxito!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        
+    with col_c2:
+        st.write("👩‍💼 **Gestión de Compañeras (Personal)**")
+        
+        with st.form("form_nueva_companera", clear_on_submit=True):
+            nueva_comp_input = st.text_input("Agregar Nueva Compañera")
+            btn_add_comp = st.form_submit_button("➕ Registrar Compañera")
+            
+            if btn_add_comp:
+                if not nueva_comp_input:
+                    st.warning("⚠️ Ingresa un nombre válido.")
+                else:
+                    try:
+                        supabase.table("personal").insert({"nombre": nueva_comp_input.strip().upper()}).execute()
+                        st.success("✅ ¡Compañera agregada con éxito!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+        with st.form("form_eliminar_companera"):
+            st.write("❌ **Dar de baja compañera**")
+            comp_a_borrar = st.selectbox("Selecciona a quién eliminar", personal_opciones)
+            btn_del_comp = st.form_submit_button("🗑️ Eliminar Compañera")
+            
+            if btn_del_comp:
+                if len(personal_opciones) <= 1:
+                    st.warning("⚠️ No puedes eliminar a todos los miembros.")
+                else:
+                    try:
+                        supabase.table("personal").delete().eq("nombre", comp_a_borrar).execute()
+                        st.success(f"🗑️ ¡Compañera {comp_a_borrar} eliminada con éxito!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al eliminar: {e}")
 
 # Botón lateral para salir
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state["autenticado"] = False
+    st.session_state["usuario_actual"] = ""
     st.rerun()
